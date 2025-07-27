@@ -6,7 +6,6 @@ namespace Pg\Tests\Middleware\Stack;
 
 use PHPUnit\Framework\MockObject\Exception;
 use PHPUnit\Framework\TestCase;
-use Pg\Middleware\Stack\MiddlewareAwareStackTrait;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Container\ContainerExceptionInterface;
