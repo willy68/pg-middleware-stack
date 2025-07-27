@@ -1,0 +1,32 @@
+{
+    "name": "willy68/pg-middleware-stack",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Pg\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Pg\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "willy",
+            "email": "william.lety@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "~8.1 || ~8.2 || ~8.3 || ~8.4",
+        "psr/container": "^1.0 || ^2.0",
+        "psr/http-message": "^1.0.1",
+        "psr/http-server-middleware": "^1.0"
+    },
+    "require-dev": {
+        "symfony/var-dumper": "^7.0",
+        "phpunit/phpunit": "^10.1 || ^11.5 || ^12.2",
+        "squizlabs/php_codesniffer": "^3.6"
+    }
+}
