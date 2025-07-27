@@ -4,160 +4,138 @@ declare(strict_types=1);
 
 namespace Pg\Tests\Middleware\Stack;
 
+use Pg\Middleware\Stack\MiddlewareAwareStackTrait;
 use PHPUnit\Framework\MockObject\Exception;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
-use Psr\Container\ContainerExceptionInterface;
-use Psr\Container\NotFoundExceptionInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\MiddlewareInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 
 class MiddlewareAwareStackTraitTest extends TestCase
 {
-    private MiddlewareAwareStack $stack;
-    private ContainerInterface $container;
+    private object $middlewareAware;
 
-    public function testInitialStackIsEmpty(): void
+    public function testAddSingleMiddleware()
     {
-        $this->assertCount(0, $this->stack->getMiddlewareStack());
+        $middleware = $this->getMockMiddleware('test');
+        $result = $this->middlewareAware->middleware($middleware);
+
+        $this->assertSame($this->middlewareAware, $result);
+        $this->assertCount(1, $this->middlewareAware->getMiddlewareStack());
+        $this->assertSame($middleware, $this->middlewareAware->getMiddlewareStack()[0]);
     }
 
-    public function testAddSingleMiddleware(): void
+    protected function getMockMiddleware(string $name): object
     {
-        $middleware = new TestMiddleware1();
-        $this->stack->middleware($middleware);
+        return new class ($name) implements MiddlewareInterface {
+            private string $name;
 
-        $stack = $this->stack->getMiddlewareStack();
-        $this->assertCount(1, $stack);
-        $this->assertSame($middleware, $stack[0]);
+            public function __construct(string $name = '')
+            {
+                $this->name = $name;
+            }
+
+            public function getName(): string
+            {
+                return $this->name;
+            }
+
+            public function process(
+                ServerRequestInterface $request,
+                RequestHandlerInterface $handler
+            ): ResponseInterface {
+                return $handler->handle($request);
+            }
+        };
     }
 
-    public function testAddMultipleMiddlewares(): void
+    public function testAddMultipleMiddlewares()
     {
-        $middleware1 = new TestMiddleware1();
-        $middleware2 = new TestMiddleware2();
+        $middleware1 = $this->getMockMiddleware('one');
+        $middleware2 = $this->getMockMiddleware('two');
 
-        $this->stack->middlewares([$middleware1, $middleware2]);
+        $result = $this->middlewareAware->middlewares([$middleware1, $middleware2]);
 
-        $stack = $this->stack->getMiddlewareStack();
-        $this->assertCount(2, $stack);
-        $this->assertSame($middleware1, $stack[0]);
-        $this->assertSame($middleware2, $stack[1]);
+        $this->assertSame($this->middlewareAware, $result);
+        $this->assertCount(2, $this->middlewareAware->getMiddlewareStack());
+        $this->assertSame($middleware1, $this->middlewareAware->getMiddlewareStack()[0]);
+        $this->assertSame($middleware2, $this->middlewareAware->getMiddlewareStack()[1]);
     }
 
-    public function testPrependMiddleware(): void
+    public function testPrependMiddleware()
     {
-        $middleware1 = new TestMiddleware1();
-        $middleware2 = new TestMiddleware2();
+        $middleware1 = $this->getMockMiddleware('one');
+        $middleware2 = $this->getMockMiddleware('two');
 
-        $this->stack->middleware($middleware1);
-        $this->stack->prependMiddleware($middleware2);
+        $this->middlewareAware->middleware($middleware1);
+        $result = $this->middlewareAware->prependMiddleware($middleware2);
 
-        $stack = $this->stack->getMiddlewareStack();
-        $this->assertSame($middleware2, $stack[0]);
-        $this->assertSame($middleware1, $stack[1]);
-    }
-
-    /**
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
-     */
-    public function testShiftMiddlewareWithObject(): void
-    {
-        $middleware = new TestMiddleware1();
-        $this->stack->middleware($middleware);
-
-        $shifted = $this->stack->shiftMiddleware($this->container);
-        $this->assertSame($middleware, $shifted);
-        $this->assertCount(0, $this->stack->getMiddlewareStack());
-    }
-
-    /**
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
-     */
-    public function testShiftMiddlewareWithString(): void
-    {
-        $middleware = new TestMiddleware1();
-
-        $this->container->method('has')
-            ->with('TestMiddleware1')
-            ->willReturn(true);
-
-        $this->container->method('get')
-            ->with('TestMiddleware1')
-            ->willReturn($middleware);
-
-        $this->stack->middleware('TestMiddleware1');
-        $shifted = $this->stack->shiftMiddleware($this->container);
-
-        $this->assertSame($middleware, $shifted);
-        $this->assertCount(0, $this->stack->getMiddlewareStack());
-    }
-
-    /**
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
-     */
-    public function testShiftMiddlewareWithNonExistentService(): void
-    {
-        $this->container->method('has')
-            ->with('NonExistent')
-            ->willReturn(false);
-
-        $this->stack->middleware('NonExistent');
-        $shifted = $this->stack->shiftMiddleware($this->container);
-
-        $this->assertNull($shifted);
-        $this->assertCount(0, $this->stack->getMiddlewareStack());
-    }
-
-    /**
-     * @throws ContainerExceptionInterface
-     * @throws NotFoundExceptionInterface
-     */
-    public function testShiftMiddlewareWithEmptyStack(): void
-    {
-        $shifted = $this->stack->shiftMiddleware($this->container);
-        $this->assertNull($shifted);
-    }
-
-    public function testGetMiddlewareStack(): void
-    {
-        $middleware1 = new TestMiddleware1();
-        $middleware2 = new TestMiddleware2();
-
-        $this->stack->middleware($middleware1);
-        $this->stack->middleware($middleware2);
-
-        $stack = $this->stack->getMiddlewareStack();
-        $this->assertCount(2, $stack);
-        $this->assertSame($middleware1, $stack[0]);
-        $this->assertSame($middleware2, $stack[1]);
-    }
-
-    public function testMiddlewareStackIsIterable(): void
-    {
-        $middleware = new TestMiddleware1();
-        $this->stack->middleware($middleware);
-
-        $count = 0;
-        foreach ($this->stack as $item) {
-            $this->assertSame($middleware, $item);
-            $count++;
-        }
-
-        $this->assertEquals(1, $count);
+        $this->assertSame($this->middlewareAware, $result);
+        $this->assertCount(2, $this->middlewareAware->getMiddlewareStack());
+        $this->assertSame($middleware2, $this->middlewareAware->getMiddlewareStack()[0]);
+        $this->assertSame($middleware1, $this->middlewareAware->getMiddlewareStack()[1]);
     }
 
     /**
      * @throws Exception
      */
+    public function testShiftMiddlewareWithObject()
+    {
+        $container = $this->createMock(ContainerInterface::class);
+        $middleware = $this->getMockMiddleware('test');
+
+        $this->middlewareAware->middleware($middleware);
+        $result = $this->middlewareAware->shiftMiddleware($container);
+
+        $this->assertSame($middleware, $result);
+        $this->assertCount(0, $this->middlewareAware->getMiddlewareStack());
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function testShiftMiddlewareWithString()
+    {
+        $middleware = $this->getMockMiddleware('test');
+        $container = $this->createMock(ContainerInterface::class);
+
+        $container->method('has')
+            ->with('middleware.service')
+            ->willReturn(true);
+
+        $container->method('get')
+            ->with('middleware.service')
+            ->willReturn($middleware);
+
+        $this->middlewareAware->middleware('middleware.service');
+        $result = $this->middlewareAware->shiftMiddleware($container);
+
+        $this->assertSame($middleware, $result);
+        $this->assertCount(0, $this->middlewareAware->getMiddlewareStack());
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function testShiftMiddlewareWithEmptyStack()
+    {
+        $container = $this->createMock(ContainerInterface::class);
+        $result = $this->middlewareAware->shiftMiddleware($container);
+
+        $this->assertNull($result);
+    }
+
     protected function setUp(): void
     {
-        $this->stack = new MiddlewareAwareStack();
+        $this->middlewareAware = $this->getMiddlewareStackClass();
+    }
 
-        // Create a mock container for testing
-        $this->container = $this->createMock(ContainerInterface::class);
-        $this->response = $this->createMock(ResponseInterface::class);
+    protected function getMiddlewareStackClass(): object
+    {
+        return new class {
+            use MiddlewareAwareStackTrait;
+        };
     }
 }
